@@ -1,9 +1,9 @@
 #pragma once
-
 #include <atomic>
 #include <memory>
 #include <optional>
 #include <thread>
+#include <vector>
 
 constexpr size_t MAX_HAZARD_SLOTS{128};
 
@@ -28,6 +28,24 @@ private:
         Node(int val) : value(val), next(nullptr) {}
         ~Node() = default;
     };
+
+
+    class TLContext {
+
+    private:
+        size_t slotIndex{MAX_HAZARD_SLOTS};
+        std::vector<Node*> retiredPtrs{};
+        HazardSlot* domainPtr{nullptr};
+        HazardSlot* mySlot{nullptr};
+        static constexpr size_t WATERMARK{16};
+
+    public:
+        
+
+    };
+
+
+
 
     std::atomic<Node*> head_{nullptr};
 
