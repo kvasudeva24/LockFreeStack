@@ -1,30 +1,37 @@
+#pragma once
+
 #include <atomic>
 #include <memory>
 #include <optional>
+#include <thread>
+
+constexpr size_t MAX_HAZARD_SLOTS{128};
+
+struct HazardSlot {
+    std::atomic<std::thread::id> owner{std::thread::id()};
+    std::atomic<void*> hazard_ptr{nullptr};
+};
+
+inline HazardSlot StackHazardDomain[MAX_HAZARD_SLOTS];
 
 
 
-template <typename T>
 class LockFreeStack {
-
+private:
     /**
      * Because we are using a linked list we define our own Node class.
      */
     struct Node {
-        T value;
+        int value;
         Node* next;
 
-        Node(T val): value(std::move(val)), next(nullptr) {};
-
+        Node(int val) : value(val), next(nullptr) {}
+        ~Node() = default;
     };
 
-private:
-
-    std::atomic<Node*> head_ = nullptr;
-
+    std::atomic<Node*> head_{nullptr};
 
 public:
-
     LockFreeStack() = default;
 
     /**
@@ -35,9 +42,8 @@ public:
      * can change the stack from the moment you issued the copy to the moment
      * it completes.
      */
-    LockFreeStack(LockFreeStack& other) = delete;
-    LockFreeStack& operator=(LockFreeStack& other) = delete;
-
+    LockFreeStack(const LockFreeStack& other) = delete;
+    LockFreeStack& operator=(const LockFreeStack& other) = delete;
 
     /**
      * Because the structure owns the memory for the nodes, it must clean up
@@ -46,63 +52,8 @@ public:
      * It is safe to assume that in good practice, the destructor is called in a
      * SINGLE THREADED context.
      */
-    ~LockFreeStack(){
+    ~LockFreeStack();
 
-    }
-
-
-    void push(const T& value) {
-
-        std::unique_ptr<Node> newNode = std::make_unique<Node>(value);
-
-        Node* oldHead = head_.load(std::memory_order_relaxed);
-
-        while (1) {
-
-            newNode->next = oldHead;
-
-            bool result = head_.compare_exchange_weak(oldHead,
-                                                      newNode.get(),
-                                                      std::memory_order_release,
-                                                      std::memory_order_relaxed);
-
-            if ( result ) {
-                break;
-            }
-        }
-
-        //
-        // We have successfully updated our head of the stack
-        // Release the memory associated with the ptr we created
-        //
-        newNode.release();
-    }
-
-
-    std::optional<T> pop() {
-        Node* newHead;
-
-        Node* oldHead = head_.load(std::memory_order_relaxed);
-
-        while (1) {
-
-            if (oldHead == nullptr) {
-                return {};
-            }
-
-            newHead = oldHead->next;
-
-            bool result = head_.compare_exchange_weak(oldHead,
-                                                      newHead,
-                                                      std::memory_order_acquire,
-                                                      std::memory_order_relaxed);
-
-            if ( result == true ) {
-                break;
-            }
-        }
-
-        return oldHead->value;
-    }
-
+    void push(const int& value);
+    std::optional<int> pop();
 };
