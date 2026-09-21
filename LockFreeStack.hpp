@@ -4,6 +4,7 @@
 #include <optional>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 
 constexpr size_t MAX_HAZARD_SLOTS{128};
 
@@ -35,12 +36,27 @@ private:
     private:
         size_t slotIndex{MAX_HAZARD_SLOTS};
         std::vector<Node*> retiredPtrs{};
-        HazardSlot* domainPtr{nullptr};
         HazardSlot* mySlot{nullptr};
         static constexpr size_t WATERMARK{16};
+        
+        /**
+         * The domainPtr is not needed in this design as we make a simplfying
+         * assumption that there is only one LockFreeStack among the whole
+         * program. Realistically, this is not the case and we need the domainPtr
+         * to point back to the Hazard Area (the memory that all threads will
+         * share to determine if it is safe to delete).
+         */
+        // HazardSlot* domainPtr{nullptr};
+
+        void sweep();
 
     public:
-        
+
+        TLContext();
+
+        void retireNode(Node* node);
+
+        ~TLContext();
 
     };
 
