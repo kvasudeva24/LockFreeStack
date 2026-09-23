@@ -1,10 +1,9 @@
 #pragma once
 #include <atomic>
 #include <memory>
-#include <optional>
 #include <thread>
 #include <vector>
-#include <unordered_set>
+#include <optional>
 
 constexpr size_t MAX_HAZARD_SLOTS{128};
 
@@ -50,18 +49,19 @@ private:
 
         void sweep();
 
-    public:
-
         TLContext();
 
         void retireNode(Node* node);
 
         ~TLContext();
 
+    
+        friend class LockFreeStack;
+
     };
 
 
-
+    TLContext& getContext();
 
     std::atomic<Node*> head_{nullptr};
 

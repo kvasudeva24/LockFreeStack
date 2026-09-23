@@ -38,30 +38,51 @@ void LockFreeStack::push(const int& value) {
     newNode.release();
 }
 
-// std::optional<int> LockFreeStack::pop() {
-//     Node* newHead;
+std::optional<int> LockFreeStack::pop() {
 
-//     Node* oldHead = head_.load(std::memory_order_relaxed);
+    TLContext& ctx = getContext();
+    HazardSlot* slot = ctx.mySlot;
+    Node* oldHead;
+    Node* curHead;
 
-//     while (1) {
-//         if (oldHead == nullptr) {
-//             return {};
-//         }
+    while (1) {
+        oldHead = head_.load(std::memory_order_relaxed);
 
-//         newHead = oldHead->next;
+        if ( oldHead == nullptr ) {
+            return {};
+        }
 
-//         bool result = head_.compare_exchange_weak(oldHead,
-//                                                   newHead,
-//                                                   std::memory_order_acquire,
-//                                                   std::memory_order_relaxed);
+        slot->hazard_ptr.store(oldHead, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
 
-//         if (result == true) {
-//             break;
-//         }
-//     }
+        curHead = head_.load(std::memory_order_relaxed);
 
-//     return oldHead->value;
-// }
+        if ( oldHead != curHead ) {
+            continue;
+        }
+
+        Node* newHead = oldHead->next;
+
+        bool result = head_.compare_exchange_weak(oldHead,
+                                                  newHead,
+                                                  std::memory_order_acquire,
+                                                  std::memory_order_relaxed);
+
+        if ( result == true ) {
+            break;
+        }
+    }
+
+    int val = oldHead->value;
+    slot->hazard_ptr.store(nullptr, std::memory_order_release);
+    ctx.retireNode(oldHead);
+    return val;
+}
+
+LockFreeStack::TLContext& LockFreeStack::getContext() {
+    thread_local TLContext ctx;
+    return ctx;
+}
 
 LockFreeStack::TLContext::TLContext() {
     size_t slot{};
@@ -97,5 +118,5 @@ void LockFreeStack::TLContext::retireNode(Node* node) {
 }
 
 void LockFreeStack::TLContext::sweep() {
-    
+
 }
