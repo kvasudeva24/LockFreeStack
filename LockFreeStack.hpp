@@ -36,7 +36,7 @@ private:
         size_t slotIndex{MAX_HAZARD_SLOTS};
         std::vector<Node*> retiredPtrs{};
         HazardSlot* mySlot{nullptr};
-        static constexpr size_t WATERMARK{16};
+        static constexpr size_t WATERMARK{256};
         
         /**
          * The domainPtr is not needed in this design as we make a simplfying

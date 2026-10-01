@@ -118,5 +118,30 @@ void LockFreeStack::TLContext::retireNode(Node* node) {
 }
 
 void LockFreeStack::TLContext::sweep() {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
 
+    size_t keep{};
+
+    Node* hazardPtrs[MAX_HAZARD_SLOTS];
+    for (size_t i{}; i < MAX_HAZARD_SLOTS; i++) {
+        hazardPtrs[i] = StackHazardDomain[i].hazard_ptr.load(std::memory_order_relaxed);
+    }
+
+    for ( size_t i{}; i < retiredPtrs.size(); i++ ) {
+        bool match = false;
+        for ( size_t j{}; j < MAX_HAZARD_SLOTS; j++ ) {
+            if ( hazardPtrs[j] == retiredPtrs[i] ) {
+                match = true;
+                break;
+            }
+        }
+
+        if ( match == false ) {
+            delete retiredPtrs[i];
+        } else {
+            retiredPtrs[keep++] = retiredPtrs[i];
+        }
+    }
+
+    retiredPtrs.resize(keep);
 }
