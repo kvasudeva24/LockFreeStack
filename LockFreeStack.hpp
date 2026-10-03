@@ -4,6 +4,7 @@
 #include <thread>
 #include <vector>
 #include <optional>
+#include <mutex>
 
 constexpr size_t MAX_HAZARD_SLOTS{128};
 
@@ -32,38 +33,34 @@ private:
 
     class TLContext {
 
-    private:
         size_t slotIndex{MAX_HAZARD_SLOTS};
         std::vector<Node*> retiredPtrs{};
         HazardSlot* mySlot{nullptr};
         static constexpr size_t WATERMARK{256};
-        
-        /**
-         * The domainPtr is not needed in this design as we make a simplfying
-         * assumption that there is only one LockFreeStack among the whole
-         * program. Realistically, this is not the case and we need the domainPtr
-         * to point back to the Hazard Area (the memory that all threads will
-         * share to determine if it is safe to delete).
-         */
-        // HazardSlot* domainPtr{nullptr};
-
-        void sweep();
 
         TLContext();
-
+        void sweep();
         void retireNode(Node* node);
-
         ~TLContext();
 
-    
         friend class LockFreeStack;
-
     };
 
 
-    TLContext& getContext();
+    static TLContext& getContext();
 
     std::atomic<Node*> head_{nullptr};
+
+    /**
+     * When a thread is exiting somre retired pointers may still be in other 
+     * threads hazard slots. In that case we cannot retire them and because we
+     * make the simplifying assumption that the main() thread will never act on
+     * the LockFreeStack and all threads that act on the stacks are reclaimed
+     * before destruction, we have zombiePtrs that will free unlinked nodes
+     * before exiting.
+     */
+    inline static std::vector<Node*> zombiePtrs{};
+    inline static std::mutex zombieMtx{}; //This protects the zombiePtrs
 
 public:
     LockFreeStack() = default;

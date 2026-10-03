@@ -11,6 +11,11 @@ LockFreeStack::~LockFreeStack() {
         delete iter;
         iter = next;
     }
+
+    for ( auto& zombie : zombiePtrs ) {
+        delete zombie;
+    }
+    zombiePtrs.clear();
 }
 
 void LockFreeStack::push(const int& value) {
@@ -49,10 +54,11 @@ std::optional<int> LockFreeStack::pop() {
         oldHead = head_.load(std::memory_order_relaxed);
 
         if ( oldHead == nullptr ) {
+            slot->hazard_ptr.store(nullptr, std::memory_order_release);
             return {};
         }
 
-        slot->hazard_ptr.store(oldHead, std::memory_order_relaxed);
+        slot->hazard_ptr.store(oldHead, std::memory_order_release);
         std::atomic_thread_fence(std::memory_order_seq_cst);
 
         curHead = head_.load(std::memory_order_relaxed);
@@ -122,9 +128,9 @@ void LockFreeStack::TLContext::sweep() {
 
     size_t keep{};
 
-    Node* hazardPtrs[MAX_HAZARD_SLOTS];
+    void* hazardPtrs[MAX_HAZARD_SLOTS];
     for (size_t i{}; i < MAX_HAZARD_SLOTS; i++) {
-        hazardPtrs[i] = StackHazardDomain[i].hazard_ptr.load(std::memory_order_relaxed);
+        hazardPtrs[i] = StackHazardDomain[i].hazard_ptr.load(std::memory_order_acquire);
     }
 
     for ( size_t i{}; i < retiredPtrs.size(); i++ ) {
@@ -144,4 +150,16 @@ void LockFreeStack::TLContext::sweep() {
     }
 
     retiredPtrs.resize(keep);
+}
+
+LockFreeStack::TLContext::~TLContext() {
+    mySlot->hazard_ptr.store(nullptr, std::memory_order_release);   
+    sweep();
+
+    {
+        std::unique_lock<std::mutex> lock{zombieMtx};
+        zombiePtrs.insert(zombiePtrs.end(), retiredPtrs.begin(), retiredPtrs.end());
+    }
+    retiredPtrs.clear();
+    mySlot->owner.store(std::thread::id(), std::memory_order_release);
 }
