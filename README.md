@@ -2,7 +2,7 @@
 
 > For my analysis and understanding of the project, refer to the SOLUTIONS.md in the `Solutions` folder.
 
-A stack of `int`s that many threads can `push` and `pop` concurrently **without a mutex**.
+A stack of `int`s that many threads can `push`  and `pop` concurrently **without a mutex**.
 
 ```
 LockFreeStack.hpp   <- shared base everyone receives (API + layout)
